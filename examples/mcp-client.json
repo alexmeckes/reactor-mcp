@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "reactor_inference": {
+      "command": "/absolute/path/to/reactor-mcp/.venv/bin/python",
+      "args": ["-m", "reactor_mcp.server"],
+      "env": {
+        "REACTOR_ENABLE_LIVE": "false",
+        "REACTOR_OUTPUT_DIR": "/absolute/path/to/reactor-mcp/outputs"
+      }
+    },
+    "reactor_docs": {
+      "url": "https://docs.reactor.inc/mcp"
+    }
+  }
+}

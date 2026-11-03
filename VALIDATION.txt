@@ -1,0 +1,21 @@
+Release 0.2.0 — November 3, 2026
+
+$ .venv/bin/pytest -q
+42 passed in 3.75s
+
+$ .venv/bin/ruff check src tests examples
+All checks passed!
+
+$ .venv/bin/ruff format --check src tests examples
+10 files already formatted
+
+$ uv lock --check --offline
+Passed
+
+$ skill-creator/scripts/quick_validate.py skills/reactor-workflow
+Skill is valid!
+
+MCP protocols: 2026-07-28 and legacy 2025-11-25 tested via stdio and in-memory clients.
+Public docs MCP discovery and one read-only search succeeded without credentials.
+Two-server example JSON parsed successfully; live use defaults to false.
+No authenticated inference or billable generation performed.
