@@ -64,7 +64,7 @@ async def test_real_stdio_process_discovery_and_safe_default(mode):
     async with asyncio.timeout(15):
         async with Client(params, mode=mode) as client:
             assert client.server_info.name == "Reactor inference"
-            assert client.server_info.version == "0.2.0"
+            assert client.server_info.version == "0.3.0"
             assert client.protocol_version == ("2025-11-25" if mode == "legacy" else "2026-07-28")
             assert len((await client.list_tools()).tools) == 8
             info = await client.call_tool("reactor_describe", {})

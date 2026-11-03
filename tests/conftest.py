@@ -7,10 +7,15 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def offline(monkeypatch):
+def offline(monkeypatch, tmp_path):
     """Tests can only use explicitly injected mock transports; no real HTTP."""
     monkeypatch.delenv("REACTOR_API_KEY", raising=False)
     monkeypatch.setenv("REACTOR_ENABLE_LIVE", "false")
+    monkeypatch.setenv("REACTOR_CONFIG_DIR", str(tmp_path / "settings"))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "home/.codex"))
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.delenv("REACTOR_OUTPUT_DIR", raising=False)
 
     async def forbidden(*args, **kwargs):
         raise AssertionError("Real HTTP is prohibited in tests")

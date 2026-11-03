@@ -26,7 +26,7 @@ def create_server(service: Service | None = None) -> MCPServer:
 
     server = MCPServer(
         "Reactor inference",
-        version="0.2.0",
+        version="0.3.0",
         lifespan=lifespan,
         instructions="Helios streaming inference. Start is billable. Poll status; capture while running; "
         "wait for capture completion before closing. Local handles are not upstream job IDs.",
@@ -50,7 +50,7 @@ def create_server(service: Service | None = None) -> MCPServer:
     ) -> SessionStatus:
         """Start a BILLABLE Helios session asynchronously. Poll reactor_status using the returned handle.
 
-        Requires REACTOR_ENABLE_LIVE=true and a server-side API key. One live session at a time.
+        Requires live use enabled via setup or environment and a server-side key. One session at a time.
         The duration cap includes local connection time. Never automatically retry a failed start.
         """
         return service.start(prompt, max_seconds)

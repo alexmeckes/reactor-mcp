@@ -4,20 +4,23 @@ build-backend = "hatchling.build"
 
 [project]
 name = "reactor-inference-mcp"
-version = "0.2.0"
+version = "0.3.0"
 description = "Local MCP tools for Reactor Helios streaming inference sessions"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["mcp==2.3.0", "reactor-sdk==1.13.0", "httpx>=0.28,<1"]
+dependencies = ["mcp==2.3.0", "reactor-sdk==1.13.0", "httpx>=0.28,<1", "keyring>=25.7,<26; sys_platform == 'darwin'"]
 
 [project.scripts]
-reactor-mcp = "reactor_mcp.server:main"
+reactor-mcp = "reactor_mcp.cli:main"
 
 [dependency-groups]
 dev = ["pytest>=8,<10", "pytest-asyncio>=1,<2", "ruff>=0.14,<1"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/reactor_mcp"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"skills/reactor-workflow/SKILL.md" = "reactor_mcp/data/SKILL.md"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

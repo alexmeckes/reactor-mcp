@@ -1,10 +1,45 @@
 # Reactor inference MCP
 
-A local, unofficial MCP server for **Reactor Helios inference**, built with the official Python MCP SDK and `reactor-sdk`. Version 0.2.0 includes a configuration for Reactor's official docs MCP and a companion workflow skill. It opens live sessions, changes prompts, pauses/resumes generation, captures clips to local files, and terminates sessions.
+A local, unofficial MCP server for **Reactor Helios inference**, built with the official Python MCP SDK and `reactor-sdk`. It opens live sessions, changes prompts, pauses/resumes generation, captures clips to local files, and terminates sessions. Version **0.3.0** adds guided setup for **Claude Code and Codex**, secure macOS Keychain storage, docs search, and an optional workflow skill.
 
 This is an implemented, mock-tested MVP. **Authenticated generation and real video playback have not been validated.** No keys have been configured and no paid session has been started.
 
-## Install and run
+## Quick setup: Claude Code or Codex
+
+On macOS, install your chosen client's CLI and [uv](https://docs.astral.sh/uv/getting-started/installation/) first (`brew install uv` if you use Homebrew). Then run:
+
+```sh
+uvx --python 3.12 --from git+https://github.com/alexmeckes/reactor-mcp@v0.3.0 reactor-mcp setup
+```
+
+The wizard asks which client to connect (Claude Code, Codex, or both), accepts your API key through a **hidden local prompt**, and stores it in **macOS Keychain**. It registers both inference and Reactor's official docs MCP using your client's own CLI. You choose whether to enable future paid inference and install the workflow skill. **No paid session is started during setup.** Press Enter at the key prompt to keep an existing key or skip it for docs-only use.
+
+Restart your client and ask:
+
+> Check Reactor setup and search its docs about Helios.
+
+No repository clone, manual JSON/TOML edits, or Python installation is needed: uv manages Python 3.12 and the package environment. Git must be available for the GitHub source install. The first run downloads dependencies. You can skip client selection with `setup --client claude`, `setup --client codex`, or `setup --client both`.
+
+To check local configuration without accessing Keychain or calling Reactor:
+
+```sh
+uvx --python 3.12 --from git+https://github.com/alexmeckes/reactor-mcp@v0.3.0 reactor-mcp doctor
+```
+
+`doctor` checks server imports and whether client entries/credential configuration exist. It does **not** prove a stored key is still present or valid, connect to either MCP server, or generate video. Setup and `doctor` never read existing Keychain credentials. A live inference request reads the stored key when needed; macOS may ask for Keychain access.
+
+Setup details:
+
+- Connections are user-scoped and called `reactor_inference` and `reactor_docs`. Existing conflicting entries are left unchanged; matching entries are skipped on rerun. Project-specific overrides can still shadow a user entry.
+- Non-secret preferences live in `~/.config/reactor-mcp/settings.json` (owner-only file permissions). The API key is a Keychain item with service `reactor-inference-mcp` and account `api-key`; it never goes into client configuration, command arguments, or this repository. Keychain protects storage; access is governed by macOS permissions for the Python process.
+- Clips from wizard setups go to `~/Movies/Reactor`. Environment variables take precedence over saved settings: `REACTOR_API_KEY`, `REACTOR_ENABLE_LIVE`, and `REACTOR_OUTPUT_DIR`. An explicitly empty API-key environment variable disables Keychain fallback. `REACTOR_CONFIG_DIR` overrides the settings directory.
+- The optional skill installs into `~/.claude/skills/reactor-workflow` and/or `~/.agents/skills/reactor-workflow`. Existing modified skills are preserved. Custom `CLAUDE_CONFIG_DIR` and `CODEX_HOME` client configurations are supported; Codex's user skill directory remains `~/.agents/skills`.
+- Rerun setup to replace the key or turn live inference off (answer **No** to paid sessions). To remove the connections, use `claude mcp remove --scope user reactor_inference` / `reactor_docs`, or `codex mcp remove reactor_inference` / `reactor_docs`. Delete the named Keychain item with Keychain Access if no longer needed; remove the settings/skill folders separately.
+- Setup can register clients on other platforms, but automatic secret storage is macOS-only. Elsewhere, supply the key through your client's environment configuration. Native Reactor SDK availability still limits supported OS/architecture combinations.
+
+The launcher uses the versioned Git tag rather than a temporary Python executable path. Updating to a future version requires reviewing/removing the old named entries and rerunning that release's setup; setup never silently replaces custom client settings. Dependencies installed through `uvx` follow the package constraints; source development below uses the full lockfile.
+
+## Source development and manual setup
 
 Requires Python 3.11+ and `uv`. Tested on macOS arm64 with Python 3.12.13, MCP SDK **2.3.0**, Reactor SDK 1.13.0. Reactor's native SDK wheel must support your OS/architecture. The server supports the current `2026-07-28` protocol and legacy `2025-11-25` clients; both paths are exercised in protocol tests.
 
@@ -50,7 +85,7 @@ Adapt `examples/mcp-client.json` to your client. It uses Cursor-style `mcpServer
 }
 ```
 
-Discovery works without an API key. For a later approved live trial, supply `REACTOR_API_KEY` to the server through your client's secure environment/secret mechanism, then explicitly set `REACTOR_ENABLE_LIVE=true`. Do not paste a key into chat or commit it. A GUI client may not inherit your terminal environment. `.env.example` documents variables; the server does **not** automatically load `.env` files.
+Discovery works without an API key. The wizard above handles Keychain and live-use preferences on macOS. For manual configuration, supply `REACTOR_API_KEY` to the server through your client's secure environment/secret mechanism, then explicitly set `REACTOR_ENABLE_LIVE=true`. Do not paste a key into chat or commit it. A GUI client may not inherit your terminal environment. `.env.example` documents variables; the server does **not** automatically load `.env` files.
 
 The API key is exchanged at `POST https://api.reactor.inc/tokens` for a token restricted to `reactor/helios`, one session, and the requested duration cap. The SDK receives only that token. Keys, tokens, authenticated playlist URLs, and raw upstream error bodies are not returned in tool results.
 
@@ -98,7 +133,7 @@ These are live WebRTC sessions, **not a REST job queue**. The session/capture ha
 - Connection deadline 45 seconds, command deadline 15 seconds, capture deadline 120 seconds, HTTP request timeout 15 seconds. No automatic retries of session creation or commands. Clip readiness polls only repeat the download GET after HTTP 202.
 - Graceful stdio shutdown closes sessions. Hard process termination or network loss cannot confirm termination; the server-side cap is the fallback. This is not a dollar-denominated spending cap, and separate MCP processes have independent session limits.
 - Clips require recording enabled on the model. A requested clip length is media time, not time spent waiting. Closing/pausing too early or the session cap expiring can prevent capture completion. Model availability, recording support, permissions, and playback remain live-test questions.
-- Clip downloads are limited to 256 MiB, written to generated filenames in `REACTOR_OUTPUT_DIR` (default: `outputs` relative to the process working directory). Partial files are removed on failure/cancellation. Completed files persist; handles and the last 20 session/capture records do not survive process exit. Remove unwanted clips yourself.
+- Clip downloads are limited to 256 MiB, written to generated filenames in `REACTOR_OUTPUT_DIR` or the saved output directory (`~/Movies/Reactor` after wizard setup; otherwise `outputs` relative to the process working directory). Partial files are removed on failure/cancellation. Completed files persist; handles and the last 20 session/capture records do not survive process exit. Remove unwanted clips yourself.
 - The downloader supports simple, unencrypted HLS media playlists. It preserves the fragmented-MP4 init segment and writes `.mp4`; legacy TS playlists produce `.ts`. Master, encrypted, byte-range, discontinuous, and redirected playlists are explicitly rejected. Bearer tokens are sent only to `https://api.reactor.inc` on its standard port, never to external storage/CDN segment URLs.
 - HTTP environment proxies are disabled for authentication/downloads (`trust_env=False`). A network requiring a proxy may need an explicit adapter change. The SDK's WebRTC transport has its own networking requirements.
 
@@ -113,6 +148,8 @@ Reviewed November 3, 2026:
 - [Billing](https://docs.reactor.inc/resources/billing): billing follows session allocation, including pauses.
 - [Official Reactor SDK source](https://github.com/reactor-team/reactor-client-sdks): installed 1.13.0 `client.py`, `_auth.py`, and `_recording.py` were inspected against the docs. The recordings guide describes Python output as MPEG-TS, while this SDK supports fragmented MP4. The downloader detects the actual manifest format instead of assuming one.
 - [Official MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) and [v2 migration guide](https://py.sdk.modelcontextprotocol.io/migration/): `MCPServer`, `Client`, snake-case annotation fields, explicit `ToolError` failures, typed results, stdio, and lifespan cleanup.
+- [Codex and Claude Code MCP registration](https://developers.openai.com/learn/docs-mcp), [Claude Code MCP](https://code.claude.com/docs/en/mcp-quickstart), [Codex skill locations](https://learn.chatgpt.com/docs/build-skills), and [Claude Code skills](https://code.claude.com/docs/en/skills): client registration and personal skill installation. CLI syntax was also checked against installed clients' `--help` and real commands in isolated temporary configurations.
+- [Python keyring](https://keyring.readthedocs.io/en/stable/): explicitly selected macOS Keychain backend with no plaintext fallback; the installed 25.7.0 backend was inspected. Credential storage/retrieval in tests uses a fake backend, never your real Keychain.
 
 `src/reactor_mcp/backend.py` uses bounded asynchronous HTTP for token exchange and download. Session control stays in the official Reactor SDK. This avoids the installed SDK downloader's blocking HTTP worker, whose requests have no explicit socket timeout. No undocumented inference REST endpoint was invented.
 

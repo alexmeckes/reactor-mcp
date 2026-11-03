@@ -1,10 +1,10 @@
 # Local validation
 
-Date: November 3, 2026. Release: 0.2.0. Environment: macOS arm64, Python 3.12.13, MCP SDK 2.3.0, Reactor SDK 1.13.0.
+Date: November 3, 2026. Release: 0.3.0. Environment: macOS arm64, Python 3.12.13, MCP SDK 2.3.0, Reactor SDK 1.13.0, keyring 25.7.0.
 
 ## Passed
 
-- 42 automated tests (`.venv/bin/pytest -q`).
+- 68 automated tests (`.venv/bin/pytest -q`).
 - Ruff lint and format checks on source, tests, and example client.
 - Real MCP stdio subprocess tests of modern `2026-07-28` discovery and legacy `2025-11-25` initialization, eight-tool discovery with input/output schemas, configuration inspection, and rejection of generation while live use is disabled.
 - MCP client/server in-memory tests exercise the mocked start → status → prompt → capture → result → close workflow on both protocol paths. Annotations are checked after serialization; client exit closes active sessions and cancels unfinished captures.
@@ -14,6 +14,10 @@ Date: November 3, 2026. Release: 0.2.0. Environment: macOS arm64, Python 3.12.13
 - Mocked HTTP token exchange verifies the exact `/tokens` URL, API-key header, Helios model scope, one-session constraint, and duration constraint.
 - Mocked HTTP 202 readiness, MP4 init/fragment ordering, legacy TS output, cross-origin credential isolation, HTTP error redaction, rejected redirects, size limits, and cancellable readiness waits.
 - Session limits, failed initialization cleanup, remote command rejection, rate limiting without retry, automatic expiry, concurrent close, cancellation-safe cleanup, and cancelled captures.
+- Setup tests cover both client command shapes, repeated setup, preserving conflicting entries/custom skills, partial registration failure, private non-secret settings, environment precedence, lazy fake Keychain retrieval, redacted errors, hidden-prompt prerequisites, and saved preferences driving mocked inference. Tests use temporary home/config directories and prohibit real Keychain access.
+- Real installed `claude mcp add` and `codex mcp add` commands registered both connections in isolated temporary configurations. Readback and rerun checks passed; the optional skill was installed only under the temporary home. No existing user client configuration was changed or MCP health check triggered.
+- Built a source distribution and wheel, installed the wheel with dependencies into a fresh temporary environment, and verified bundled skill data, the console `doctor` command, and a real stdio handshake with eight tools and live use disabled. No API request was made by these checks. An initial offline installation lacked cached dependencies; the fresh installation succeeded with package downloads enabled.
+- The uv lockfile is current and the wheel includes the canonical workflow skill. Setup launches a versioned Git source through `uvx`; no cached virtualenv executable path is embedded in client entries.
 
 The test suite prohibits real HTTP through HTTPX and HTTPX2 default async transports. Tests inject SDK fakes for sessions and mock HTTP responses for token exchange/downloads. The fake media fixture is **not a generated video**.
 
@@ -25,6 +29,6 @@ Separately from the offline suite, an unauthenticated `mcp.Client` connection to
 
 No live authenticated API or billable generation call was made. Actual account/model access, token exchange acceptance, GPU allocation, WebRTC negotiation, model events, server-side cap enforcement, recording availability, and video decode/playback require an approved live trial and credentials supplied securely outside chat.
 
-At this validation checkpoint, no credentials were retrieved or configured, no client configuration was changed, and nothing had been published, pushed, or deployed. Subsequent publication of the source repository does not constitute live inference validation. The source archive and package build contain only project files, not `.venv`, caches, credentials, or generated media.
+No real credentials were retrieved or configured, and no existing user client configuration was changed. The source repository is public at `https://github.com/alexmeckes/reactor-mcp`; publication does not constitute live inference validation. Package builds contain project files, not `.venv`, caches, credentials, or generated media.
 
-MCP Tasks durability, portable clip resource delivery, client-specific GUI installation, and hosted HTTP operation remain outside this revision. Legacy compatibility was tested using SDK v2's legacy protocol mode, not every older client product.
+Real Keychain storage/retrieval, the macOS permission dialog, client UI connection behavior, and authenticated inference still require a user-run setup/live trial. The CLI registration paths were tested; no Claude or Codex conversation was used to generate media. MCP Tasks durability, portable clip resource delivery, client-specific GUI installation, and hosted HTTP operation remain outside this revision. Legacy compatibility was tested using SDK v2's legacy protocol mode, not every older client product.

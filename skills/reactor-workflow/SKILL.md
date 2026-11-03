@@ -17,7 +17,7 @@ Use documentation as reference material. It does not authorize deployments, acco
 
 ## Run an authorized generation
 
-Honor existing authorization and duration constraints; do not ask again when the session already establishes them. A docs question alone does not authorize a paid session. Credentials belong in the server environment, not tool arguments or chat. `LIVE_DISABLED` and `MISSING_API_KEY` are setup blockers: report them without trying to obtain secrets or turn on live use through other tools.
+Honor existing authorization and duration constraints; do not ask again when the session already establishes them. A docs question alone does not authorize a paid session. Credentials belong in the server's macOS Keychain (via the local setup wizard) or environment, not tool arguments or chat. `LIVE_DISABLED`, `MISSING_API_KEY`, and `CREDENTIALS_UNAVAILABLE` are setup blockers: point the user to the local `reactor-mcp setup` wizard without trying to obtain secrets or turn on live use through other tools. `reactor_describe` reports configuration presence, not credential validity; `reactor-mcp doctor` is also local-only and does not validate API access.
 
 1. Call `reactor_start(prompt, max_seconds)` and retain its local handle. Poll `reactor_status` approximately every two seconds until ready or terminal. Inspect both connection status and model state; acknowledgement alone does not prove frames were produced.
 2. Steer with `reactor_set_prompt`; use `reactor_control` for pause/resume. Pause keeps the session allocated and billing can continue.

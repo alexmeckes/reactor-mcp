@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import time
 from collections.abc import Callable
 from contextlib import suppress
@@ -12,6 +11,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from . import config
 from .backend import MODEL, LiveBackend, ReactorFailure, safe_error
 
 
@@ -47,10 +47,7 @@ class Capture:
 class Service:
     def __init__(self, factory: Callable = LiveBackend, output_dir: Path | None = None):
         self.factory = factory
-        self.output_dir = (
-            output_dir
-            or Path(os.environ.get("REACTOR_OUTPUT_DIR", "outputs")).expanduser().resolve()
-        )
+        self.output_dir = output_dir or config.output_dir()
         self.sessions: dict[str, Session] = {}
         self.captures: dict[str, Capture] = {}
 
@@ -59,8 +56,8 @@ class Service:
             "model": MODEL,
             "transport": "WebRTC via reactor-sdk 1.13.0",
             "tools": "start → status → set_prompt/control → capture → capture_status → close",
-            "live_enabled": os.environ.get("REACTOR_ENABLE_LIVE") == "true",
-            "api_key_configured": bool(os.environ.get("REACTOR_API_KEY", "").strip()),
+            "live_enabled": config.live_enabled(),
+            "api_key_configured": config.key_configured(),
             "max_concurrent_sessions": 1,
             "default_session_seconds": 60,
             "max_session_seconds": 300,
@@ -100,14 +97,17 @@ class Service:
         }
 
     def start(self, prompt: str, max_seconds: int = 60) -> dict:
-        if os.environ.get("REACTOR_ENABLE_LIVE") != "true":
+        if not config.live_enabled():
             raise ReactorFailure(
-                "LIVE_DISABLED: Enable REACTOR_ENABLE_LIVE=true only after approving billable use."
+                "LIVE_DISABLED: Run reactor-mcp setup or set REACTOR_ENABLE_LIVE=true after approving billable use."
             )
-        key = os.environ.get("REACTOR_API_KEY", "").strip()
+        try:
+            key = config.api_key()
+        except config.ConfigError as exc:
+            raise ReactorFailure(f"CREDENTIALS_UNAVAILABLE: {exc}") from None
         if not key or key == "replace-via-secure-local-secret-flow":
             raise ReactorFailure(
-                "MISSING_API_KEY: Configure REACTOR_API_KEY securely in the server environment."
+                "MISSING_API_KEY: Run reactor-mcp setup or supply REACTOR_API_KEY securely in the server environment."
             )
         if not prompt.strip() or len(prompt) > 8000 or not 15 <= max_seconds <= 300:
             raise ReactorFailure(
