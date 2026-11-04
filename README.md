@@ -9,7 +9,7 @@ This is an implemented, mock-tested MVP. **Authenticated generation and real vid
 On macOS, install your chosen client's CLI and [uv](https://docs.astral.sh/uv/getting-started/installation/) first (`brew install uv` if you use Homebrew). Then run:
 
 ```sh
-uvx --python 3.12 --from git+https://github.com/alexmeckes/reactor-mcp@v0.4.0 reactor-mcp setup
+uvx --python 3.12 --from git+https://github.com/alexmeckes/reactor-mcp@v0.4.1 reactor-mcp setup
 ```
 
 The wizard asks which client to connect (Claude Code, Codex, or both), accepts your API key through a **hidden local prompt**, and stores it in **macOS Keychain**. It registers both inference and Reactor's official docs MCP using your client's own CLI. You choose whether to enable future paid inference and install the workflow skill. **No paid session is started during setup.** Press Enter at the key prompt to keep an existing key or skip it for docs-only use.
@@ -23,7 +23,7 @@ No repository clone, manual JSON/TOML edits, or Python installation is needed: u
 To check local configuration without accessing Keychain or calling Reactor:
 
 ```sh
-uvx --python 3.12 --from git+https://github.com/alexmeckes/reactor-mcp@v0.4.0 reactor-mcp doctor
+uvx --python 3.12 --from git+https://github.com/alexmeckes/reactor-mcp@v0.4.1 reactor-mcp doctor
 ```
 
 `doctor` checks server imports and whether client entries/credential configuration exist. It does **not** prove a stored key is still present or valid, connect to either MCP server, or generate video. Setup and `doctor` never read existing Keychain credentials. A live inference request reads the stored key when needed; macOS may ask for Keychain access.
@@ -135,7 +135,7 @@ FastH3-Omni builds 5.875–14.375 second clips with synchronized audio from a pr
 2. Call `reactor_omni_enqueue` with the prompt and optional absolute local paths: up to 9 `reference_images` (3 or fewer for real-time builds), `first_frame_image`/`last_frame_image` keyframes (each needs a reference image), and up to 3 `reference_audios`. Refer to uploads as `<Picture N>`/`<Audio N>` and give each audio a role. Files are uploaded to Reactor; only JPEG/PNG/WebP images and WAV/MP3/AAC/M4A/OGG/Opus/FLAC/WebM audio of at most 25 MiB are accepted.
 3. Chain clips with `continue_from_clip_id`: `latent` mode (default) carries motion, camera, and sound; `frame` mode starts from the source's last frame. Only the session's 8 most recent clips can be continued.
 4. Poll `reactor_status`: `clips` lists each clip's phase (`queued`, `ready`, `playing`, `finished`, `stopped`, `popped`, `failed`, `cleared`) and build time; `model_state` has queue capacities. With autoplay off, use `reactor_omni_control` `play`. `move` reorders, `pop` removes, `stop` cuts playback, `reset` clears everything.
-5. Clips reach the stream, and so a recording, only once they play. After the clips you want have played, call `reactor_capture` with `full_session=true`, wait for completion, then close.
+5. A recording covers only what has played when it is requested, and becomes ready only while more output streams after that point; with nothing playing it waits until the session ends. Queue one extra throwaway tail clip, call `reactor_capture` with `full_session=true` once the last wanted clip finishes and the tail is playing, wait for completion, then close. (Observed in live tests on November 4, 2026: a capture requested during the next clip completed in about 4 seconds; one requested with the queue empty never became ready.)
 
 Model refusals (for example `queue_full`, `invalid_image`, `request_rejected` for an over-budget prompt) surface as `COMMAND_REFUSED: <code>`; a refused command changes nothing.
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "reactor-inference-mcp"
-version = "0.4.0"
+version = "0.4.1"
 description = "Local MCP tools for Reactor Helios and FastH3-Omni inference sessions"
 readme = "README.md"
 requires-python = ">=3.11"

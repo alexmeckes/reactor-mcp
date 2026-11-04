@@ -1,5 +1,9 @@
 # Local validation
 
+## 0.4.1 (live FastH3-Omni)
+
+Date: November 4, 2026. Two capped live sessions ran through the released v0.4.0 server. Token exchange for `reactor/fast-h3-omni`, WebRTC connection (about 6 seconds), `enqueue`, autoplay, and clip phase tracking worked; 5.875-second text clips built in 3.3–3.7 seconds. A full-session recording requested with nothing left to play returned HTTP 202 until the 150-second cap cancelled it. A recording requested while the next clip played completed in about 4 seconds: a 1344×768 H.264 + AAC fragmented MP4 covering the clips played so far. Reference uploads, keyframes, and continuation were not exercised live.
+
 ## 0.4.0 (FastH3-Omni)
 
 Date: November 4, 2026. 73 automated tests and Ruff lint/format checks pass. New tests cover Omni token scope and SDK construction, start-time canvas/autoplay/flush commands, reference image/audio/keyframe uploads mapped into `enqueue`, clip phase tracking from replies and broadcasts (including a stale reply arriving after generation), sanitized failure reasons, model refusal codes, wrong-model guards, rejected non-media and symlinked upload paths, full-session capture, and MCP schema validation of Omni arguments. The real SDK exposes `upload_file` and `request_recording`.

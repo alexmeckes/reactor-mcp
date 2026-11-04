@@ -14,7 +14,7 @@ from pathlib import Path
 
 from . import config
 
-VERSION = "0.4.0"
+VERSION = "0.4.1"
 SOURCE = f"git+https://github.com/alexmeckes/reactor-mcp@v{VERSION}"
 DOCS_URL = "https://docs.reactor.inc/mcp"
 

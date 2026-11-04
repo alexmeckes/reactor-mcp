@@ -99,7 +99,7 @@ class Service:
             "output_dir": str(self.output_dir),
             "limitations": [
                 "Helios and FastH3-Omni only. No live player; captures are how you see output.",
-                "Omni clips reach the stream, and so a capture, only once they play.",
+                "Omni recordings cover what has played and complete only while a later clip plays.",
                 "Uploads are absolute local image/audio paths, at most 25 MiB, sent to Reactor.",
                 "Local handles and capture tasks disappear when this process exits.",
                 "Billing starts when ready and continues while paused; close to end the session.",

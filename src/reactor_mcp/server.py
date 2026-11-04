@@ -29,7 +29,7 @@ def create_server(service: Service | None = None) -> MCPServer:
 
     server = MCPServer(
         "Reactor inference",
-        version="0.4.0",
+        version="0.4.1",
         lifespan=lifespan,
         instructions="Helios streaming and FastH3-Omni clip inference. Starts are billable. Poll status; "
         "capture while running; wait for capture completion before closing. Local handles are not "
@@ -149,7 +149,7 @@ def create_server(service: Service | None = None) -> MCPServer:
         local task (120s deadline, 300s for a full session).
 
         Poll reactor_capture_status. Keep generation running until complete; recording must be enabled
-        on the model. Omni clips are only in the stream once played. Returns a local capture handle,
+        on the model. An Omni recording covers what has played so far and needs a clip still playing to complete. Returns a local capture handle,
         not an upstream Reactor job ID.
         """
         return service.capture(handle, None if full_session else seconds)
