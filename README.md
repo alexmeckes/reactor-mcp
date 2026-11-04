@@ -1,176 +1,83 @@
-# Reactor inference MCP
+# Reactor MCP
 
-A local, unofficial MCP server for **Reactor Helios and FastH3-Omni inference**, built with the official Python MCP SDK and `reactor-sdk`. It opens live sessions, steers Helios prompts, queues and plays FastH3-Omni clips with synchronized audio (reference images and audio, keyframes, continuation), captures recordings to local files, and terminates sessions. Version **0.4** adds FastH3-Omni; 0.3.0 added guided setup for **Claude Code and Codex**, secure macOS Keychain storage, docs search, and an optional workflow skill.
+An unofficial MCP server for running [Reactor](https://reactor.inc) video models from Claude Code or Codex. It supports two models:
 
-**Validation status (November 4, 2026):** FastH3-Omni has been exercised in short live sessions: token exchange, connection, queued text clips, reference-image uploads, a first-frame keyframe, latent continuation, autoplay, full-session recording, and download all worked. **Helios has only been tested against mocks**; it has not run live. Audio references, last-frame keyframes, `frame` continuation, and the `move`/`pop`/`stop`/`reset` controls have not run live either. See `VALIDATION.md`.
+- **FastH3-Omni**: queued 6–14 second clips with synchronized audio. Clips can use reference images and audio, pin a first or last frame, and continue earlier clips.
+- **Helios**: a continuous real-time stream you steer with text prompts.
 
-## Quick setup: Claude Code or Codex
+Recordings are downloaded to local files. Setup also connects Reactor's official docs MCP and can install a workflow skill.
 
-On macOS, install your chosen client's CLI and [uv](https://docs.astral.sh/uv/getting-started/installation/) first (`brew install uv` if you use Homebrew). Then run:
+**Status:** Omni has been tested in short live sessions (text clips, reference images, continuation, recording). Helios has only been tested against mocks. See [VALIDATION.md](VALIDATION.md).
+
+## Setup (macOS)
+
+Install [uv](https://docs.astral.sh/uv/) and the Claude Code or Codex CLI, then run:
 
 ```sh
 uvx --python 3.12 --from git+https://github.com/alexmeckes/reactor-mcp@v0.4.1 reactor-mcp setup
 ```
 
-The wizard asks which client to connect (Claude Code, Codex, or both), accepts your API key through a **hidden local prompt**, and stores it in **macOS Keychain**. It registers both inference and Reactor's official docs MCP using your client's own CLI. You choose whether to enable future paid inference and install the workflow skill. **No paid session is started during setup.** Press Enter at the key prompt to keep an existing key or skip it for docs-only use.
+The wizard:
 
-Restart your client and ask:
+- asks which client to connect (Claude Code, Codex, or both);
+- stores your API key in macOS Keychain, through a hidden prompt;
+- registers two user-scoped connections, `reactor_inference` and `reactor_docs`;
+- asks whether to allow paid sessions and whether to install the workflow skill.
 
-> Check Reactor setup and search its docs about Helios.
+It doesn't start any sessions. Restart your client afterwards.
 
-No repository clone, manual JSON/TOML edits, or Python installation is needed: uv manages Python 3.12 and the package environment. Git must be available for the GitHub source install. The first run downloads dependencies. You can skip client selection with `setup --client claude`, `setup --client codex`, or `setup --client both`.
+`reactor-mcp doctor` checks the local configuration without contacting Reactor or reading Keychain.
 
-To check local configuration without accessing Keychain or calling Reactor:
+To update to a new release, remove the old entry (`claude mcp remove --scope user reactor_inference`) and rerun setup. Setup won't overwrite a skill that differs from its own copy, so replace `~/.claude/skills/reactor-workflow/SKILL.md` yourself.
 
-```sh
-uvx --python 3.12 --from git+https://github.com/alexmeckes/reactor-mcp@v0.4.1 reactor-mcp doctor
-```
-
-`doctor` checks server imports and whether client entries/credential configuration exist. It does **not** prove a stored key is still present or valid, connect to either MCP server, or generate video. Setup and `doctor` never read existing Keychain credentials. A live inference request reads the stored key when needed; macOS may ask for Keychain access.
-
-Setup details:
-
-- Connections are user-scoped and called `reactor_inference` and `reactor_docs`. Existing conflicting entries are left unchanged; matching entries are skipped on rerun. Project-specific overrides can still shadow a user entry.
-- Non-secret preferences live in `~/.config/reactor-mcp/settings.json` (owner-only file permissions). The API key is a Keychain item with service `reactor-inference-mcp` and account `api-key`; it never goes into client configuration, command arguments, or this repository. Keychain protects storage; access is governed by macOS permissions for the Python process.
-- Clips from wizard setups go to `~/Movies/Reactor`. Environment variables take precedence over saved settings: `REACTOR_API_KEY`, `REACTOR_ENABLE_LIVE`, and `REACTOR_OUTPUT_DIR`. An explicitly empty API-key environment variable disables Keychain fallback. `REACTOR_CONFIG_DIR` overrides the settings directory.
-- The optional skill installs into `~/.claude/skills/reactor-workflow` and/or `~/.agents/skills/reactor-workflow`. Existing modified skills are preserved. Custom `CLAUDE_CONFIG_DIR` and `CODEX_HOME` client configurations are supported; Codex's user skill directory remains `~/.agents/skills`.
-- Rerun setup to replace the key or turn live inference off (answer **No** to paid sessions). To remove the connections, use `claude mcp remove --scope user reactor_inference` / `reactor_docs`, or `codex mcp remove reactor_inference` / `reactor_docs`. Delete the named Keychain item with Keychain Access if no longer needed; remove the settings/skill folders separately.
-- Setup can register clients on other platforms, but automatic secret storage is macOS-only. Elsewhere, supply the key through your client's environment configuration. Native Reactor SDK availability still limits supported OS/architecture combinations.
-
-The launcher uses the versioned Git tag rather than a temporary Python executable path. To update, remove the old `reactor_inference` entry and rerun the new release's setup (or re-add the entry with the new tag); setup never silently replaces custom client settings. Setup also leaves an installed skill alone if it differs from the release's copy, so replace `~/.claude/skills/reactor-workflow/SKILL.md` by hand after updating. Dependencies installed through `uvx` follow the package constraints; source development below uses the full lockfile.
-
-## Source development and manual setup
-
-Requires Python 3.11+ and `uv`. Tested on macOS arm64 with Python 3.12.13, MCP SDK **2.3.0**, Reactor SDK 1.13.0. Reactor's native SDK wheel must support your OS/architecture. The server supports the current `2026-07-28` protocol and legacy `2025-11-25` clients; both paths are exercised in protocol tests.
-
-```sh
-git clone https://github.com/alexmeckes/reactor-mcp.git
-cd reactor-mcp
-uv sync --locked --python 3.12
-uv run --locked reactor-mcp
-```
-
-If you downloaded the source ZIP instead, extract it and enter its `reactor-mcp` directory before running `uv sync`.
-
-The server speaks **stdio MCP**; running it directly waits for protocol input. There is no HTTP port or hosted service. A safe protocol inspection script is included:
-
-```sh
-uv run --locked python examples/inspect_mcp.py
-uv run --locked pytest -q
-uv run --locked ruff check src tests examples
-uv run --locked ruff format --check src tests examples
-```
-
-In a restricted workspace, set `UV_CACHE_DIR` to an allowed cache directory before invoking `uv`. An existing `.venv` can run the tests directly without package downloads.
-
-## MCP client configuration
-
-Adapt `examples/mcp-client.json` to your client. It uses Cursor-style `mcpServers` configuration with local stdio and remote HTTP entries; other clients may require different configuration syntax or separate UI setup. Replace both absolute paths.
-
-```json
-{
-  "mcpServers": {
-    "reactor_inference": {
-      "command": "/absolute/path/to/reactor-mcp/.venv/bin/python",
-      "args": ["-m", "reactor_mcp.server"],
-      "env": {
-        "REACTOR_ENABLE_LIVE": "false",
-        "REACTOR_OUTPUT_DIR": "/absolute/path/to/reactor-mcp/outputs"
-      }
-    },
-    "reactor_docs": {
-      "url": "https://docs.reactor.inc/mcp"
-    }
-  }
-}
-```
-
-Discovery works without an API key. The wizard above handles Keychain and live-use preferences on macOS. For manual configuration, supply `REACTOR_API_KEY` to the server through your client's secure environment/secret mechanism, then explicitly set `REACTOR_ENABLE_LIVE=true`. Do not paste a key into chat or commit it. A GUI client may not inherit your terminal environment. `.env.example` documents variables; the server does **not** automatically load `.env` files.
-
-The API key is exchanged at `POST https://api.reactor.inc/tokens` for a token restricted to the session's model (`reactor/helios` or `reactor/fast-h3-omni`), one session, and the requested duration cap. The SDK receives only that token. Keys, tokens, authenticated playlist URLs, and raw upstream error bodies are not returned in tool results.
-
-## Docs search and companion skill
-
-The two connections have distinct roles: `reactor_inference` exposes the eleven actions below, while `reactor_docs` searches Reactor's maintained documentation. No duplicate search index or proxy is needed. On November 3, 2026, a real, unauthenticated MCP connection negotiated `2026-07-28`, discovered `search_reactor` and `query_docs_filesystem_reactor`, and successfully searched for Helios prompt, pause, and recording behavior. Tool names should still come from discovery because the upstream service can change them. Its additional `submit_feedback` tool sends feedback to Reactor; it is not required for lookup and should only be used when requested.
-
-The source ZIP includes [skills/reactor-workflow/SKILL.md](skills/reactor-workflow/SKILL.md). To use it in a skill-capable client, copy the `reactor-workflow` folder into that client's skill directory, or load the file as workflow instructions. The setup wizard can install it for you. Installing the skill does not configure either MCP connection or enable paid usage.
-
-The skill guides docs lookup, the supported Helios and FastH3-Omni workflows, failure recovery, billing awareness, and clip delivery. It preserves the boundary between a documentation query and authorization to run generation. For example: “Use Reactor's docs to explain how pause affects billing” should only search/read documentation; an already-authorized clip request should use the inference tools and close the session afterward.
+Settings live in `~/.config/reactor-mcp/settings.json`, and recordings go to `~/Movies/Reactor`. The environment variables `REACTOR_API_KEY`, `REACTOR_ENABLE_LIVE`, and `REACTOR_OUTPUT_DIR` override the saved settings.
 
 ## Tools
 
-Every tool exposes JSON input and output schemas plus MCP behavior annotations.
-
-| Tool | Purpose |
+| Tool | What it does |
 | --- | --- |
-| `reactor_describe` | Supported models, configuration presence, workflows, and limits; no network |
-| `reactor_start(prompt, max_seconds=60)` | Begin a Helios connection and generation in a background task; returns immediately with a local session handle |
-| `reactor_omni_start(max_seconds=120, aspect, autoplay, flush_on_clip_end)` | Begin a FastH3-Omni session and apply its canvas and playback settings |
-| `reactor_status(handle)` | Connection state, latest model state, Omni clip phases, errors, upstream session ID, and remaining local lifetime |
-| `reactor_set_prompt(handle, prompt)` | Send Helios `set_prompt` |
-| `reactor_control(handle, action)` | Send Helios `pause` or `resume` |
-| `reactor_omni_enqueue(handle, prompt, ...)` | Upload local reference images/audio/keyframes and queue an Omni clip; returns its `clip_id` |
-| `reactor_omni_control(handle, action, clip_id, position)` | Omni `play`, `stop`, `pop`, `move`, or `reset` |
-| `reactor_capture(handle, seconds=5, full_session=False)` | Capture the last N media seconds, or the whole session, and download asynchronously |
-| `reactor_capture_status(capture_handle)` | Capture phase, error, or completed file path and clip metadata |
-| `reactor_close(handle)` | End the session, cancel unfinished capture, and release local resources |
+| `reactor_describe` | Show supported models, configuration, and limits (no network) |
+| `reactor_omni_start` | Start an Omni session: aspect ratio, autoplay, and black frames or a held last frame between clips |
+| `reactor_omni_enqueue` | Upload references and queue a clip; returns its `clip_id` |
+| `reactor_omni_control` | `play`, `stop`, `pop`, `move`, or `reset` clips |
+| `reactor_start` | Start a Helios stream with a prompt |
+| `reactor_set_prompt` / `reactor_control` | Steer a Helios stream, or pause and resume it |
+| `reactor_status` | Connection, model state, per-clip phases, errors, and time left |
+| `reactor_capture` / `reactor_capture_status` | Record the last N seconds or the whole session, and download it |
+| `reactor_close` | End the session |
 
-## End-to-end workflow
+Starting a session is billable, and billing continues while paused. Only one session runs at a time, capped at 15–300 seconds.
 
-After live usage is explicitly approved and credentials are securely available:
+## Using Omni
 
-1. Call `reactor_describe` to check configuration.
-2. Call `reactor_start` with `{"prompt":"A slow camera move through a sunlit forest","max_seconds":120}`. This can incur charges.
-3. Poll `reactor_status` with the returned **handle**, about every 2 seconds, until `phase` and `connection_status` are `ready`. Stop on `failed` or `closed`. Inspect `error`; `model_state.running` and `current_frame` provide generation evidence when model events arrive.
-4. Optionally call `reactor_set_prompt` to steer the scene. `pause` leaves the GPU session allocated and does not stop billing.
-5. After some frames have been generated, call `reactor_capture` with `{"handle":"<returned handle>","seconds":5}`. Poll `reactor_capture_status` with its `capture_handle` until `complete`, `failed`, or `cancelled`.
-6. Keep generation running until capture is complete: Reactor may wait for the recording chunk containing the clip boundary to finish. The completed `path` points to a file on the **MCP server's computer**, which can be opened in a compatible media player.
-7. Call `reactor_close` in all success and failure paths. `cleanup=disconnect_acknowledged` means the SDK disconnect completed; `cleanup=uncertain` means termination was not confirmed and the server duration cap remains the fallback.
+1. **Start:** `reactor_omni_start`. The aspect ratio (16:9, 1:1, 9:16, or 4:3) is fixed for the session.
+2. **Queue:** `reactor_omni_enqueue` with a prompt. Describe the subject, one action, the camera, the dialogue (or "None"), the sound, and the music (or "None"); see the [prompt guide](https://docs.reactor.inc/model-api-reference/fast-h3-omni/prompt-guide).
+   - Images and audio are absolute local paths that get uploaded to Reactor. Refer to them in the prompt as `<Picture N>` and `<Audio N>`.
+   - Use 3 or fewer images to keep builds real-time.
+3. **Continue:** set `continue_from_clip_id` to chain shots. Only the session's 8 most recent clips can be continued. Adding new reference images to a continuation brings those objects into the ongoing scene.
+4. **Watch:** poll `reactor_status`. Its `clips` list shows each clip's phase and build time. In testing, clips built in 3–7 seconds.
+5. **Record:** after the last clip you want has played, start `reactor_capture` with `full_session=true` while another clip is still playing. A recording only finishes while output keeps streaming, so keep queuing short throwaway clips until it completes. Then close the session.
 
-### FastH3-Omni
+When the model refuses a request, the tool returns `COMMAND_REFUSED: <code>`, for example `queue_full` or `request_rejected` for a prompt that's too long. A refused request changes nothing.
 
-FastH3-Omni builds 5.875–14.375 second clips with synchronized audio from a prompt that covers subject, action, camera, dialogue, soundscape, and music ([prompt guide](https://docs.reactor.inc/model-api-reference/fast-h3-omni/prompt-guide)). Clips build in a queue while others play.
+## Using Helios
 
-1. Call `reactor_omni_start` with an aspect (`16:9`, `1:1`, `9:16`, `4:3`). The canvas is fixed for the session. `autoplay` (on by default) plays ready clips in queue order; `flush_on_clip_end=false` holds the last frame between clips instead of cutting to black.
-2. Call `reactor_omni_enqueue` with the prompt and optional absolute local paths: up to 9 `reference_images` (3 or fewer for real-time builds), `first_frame_image`/`last_frame_image` keyframes (each needs a reference image), and up to 3 `reference_audios`. Refer to uploads as `<Picture N>`/`<Audio N>` and give each audio a role. Files are uploaded to Reactor; only JPEG/PNG/WebP images and WAV/MP3/AAC/M4A/OGG/Opus/FLAC/WebM audio of at most 25 MiB are accepted.
-3. Chain clips with `continue_from_clip_id`: `latent` mode (default) carries motion, camera, and sound; `frame` mode starts from the source's last frame. Only the session's 8 most recent clips can be continued. A continuation can also take new reference images, which introduces those objects into the ongoing scene. In a live test, a latent continuation with two object images placed both objects into the existing scene and then transformed them as the prompt described.
-4. Poll `reactor_status`: `clips` lists each clip's phase (`queued`, `ready`, `playing`, `finished`, `stopped`, `popped`, `failed`, `cleared`) and build time; `model_state` has queue capacities. With autoplay off, use `reactor_omni_control` `play`. `move` reorders, `pop` removes, `stop` cuts playback, `reset` clears everything.
-5. A recording covers only what has played when it is requested, and becomes ready only while more output streams after that point; with nothing playing it waits until the session ends. Queue a throwaway tail clip, call `reactor_capture` with `full_session=true` once the last wanted clip finishes and the tail is playing, and keep queuing short tail clips until the capture completes, then close. In live tests on November 4, 2026, captures took between about 4 and 25 seconds to become ready, so a single 5.875-second tail was not always enough; a capture requested with the queue empty never became ready.
+Call `reactor_start` with a prompt, then poll `reactor_status` until it's ready. Steer with `reactor_set_prompt`, record with `reactor_capture`, and finish with `reactor_close`.
 
-Observed live timings: connection about 6 seconds; text-only clips built in 3.3–4.3 seconds; a continuation with two reference images built in 6.7 seconds. Each reference upload adds a few seconds before `reactor_omni_enqueue` returns, so an upload-heavy clip queued during a short clip can leave a gap in playback.
+## Limits
 
-Model refusals (for example `queue_full`, `invalid_image`, `request_rejected` for an over-budget prompt) surface as `COMMAND_REFUSED: <code>`; a refused command changes nothing.
+- **Session lifetime:** handles only exist inside the server process. Closing the process ends sessions; if that fails, Reactor's server-side duration cap is the fallback.
+- **Uploads:** only image files (JPEG, PNG, WebP) and audio files (WAV, MP3, AAC/M4A, OGG/Opus, FLAC, WebM) up to 25 MiB.
+- **Downloads:** up to 256 MiB. Recordings are saved as `.mp4`, or `.ts` for older stream formats.
+- **Credentials:** the API key is exchanged for a short-lived token limited to one session of the chosen model. Keys and tokens are never returned in tool results.
 
-These are live WebRTC sessions, **not a REST job queue**. The session/capture handles are generated by this MCP process; do not use them as upstream Reactor job IDs. Session connection phases are separate from Helios generation state. Command acknowledgement can precede model events, and an asynchronous `command_error` remains visible in status.
+## Development
 
-## Scope and operational limits
+```sh
+git clone https://github.com/alexmeckes/reactor-mcp.git && cd reactor-mcp
+uv sync --locked --python 3.12
+uv run --locked pytest -q
+uv run --locked ruff check src tests examples
+```
 
-- Helios (`set_prompt`, `start`, `pause`, `resume`) and FastH3-Omni (`enqueue`, `play`, `stop`, `pop`, `move`, `reset`, plus `set_canvas`, `set_autoplay`, and `set_flush_on_clip_end` at start) only. No arbitrary-command escape hatch, live player, session adoption, deployment, or other model schemas. Omni uploads accept only absolute paths to image/audio files.
-- One session and one pending capture per process. Sessions default to 60 seconds and accept 15–300 seconds. The local timer includes connection time; the token independently caps the server session's duration.
-- Connection deadline 45 seconds, command deadline 15 seconds, upload deadline 60 seconds per file, capture deadline 120 seconds (300 for a full-session recording), HTTP request timeout 15 seconds. No automatic retries of session creation or commands. Clip readiness polls only repeat the download GET after HTTP 202.
-- Graceful stdio shutdown closes sessions. Hard process termination or network loss cannot confirm termination; the server-side cap is the fallback. This is not a dollar-denominated spending cap, and separate MCP processes have independent session limits.
-- Clips require recording enabled on the model; it is enabled for FastH3-Omni. A requested clip length is media time, not time spent waiting. Closing/pausing too early or the session cap expiring can prevent capture completion. Helios access and recording remain untested live.
-- Clip downloads are limited to 256 MiB, written to generated filenames in `REACTOR_OUTPUT_DIR` or the saved output directory (`~/Movies/Reactor` after wizard setup; otherwise `outputs` relative to the process working directory). Partial files are removed on failure/cancellation. Completed files persist; handles and the last 20 session/capture records do not survive process exit. Remove unwanted clips yourself.
-- The downloader supports simple, unencrypted HLS media playlists. It preserves the fragmented-MP4 init segment and writes `.mp4`; legacy TS playlists produce `.ts`. Master, encrypted, byte-range, discontinuous, and redirected playlists are explicitly rejected. Bearer tokens are sent only to `https://api.reactor.inc` on its standard port, never to external storage/CDN segment URLs.
-- HTTP environment proxies are disabled for authentication/downloads (`trust_env=False`). A network requiring a proxy may need an explicit adapter change. The SDK's WebRTC transport has its own networking requirements.
-
-## Documentation and implementation evidence
-
-Reviewed November 3, 2026:
-
-- [Reactor Python SDK reference](https://docs.reactor.inc/sdk-reference/python/reactor): connection lifecycle, correlated commands, clip requests, and disconnect semantics.
-- [Helios command/event schema](https://docs.reactor.inc/model-api-reference/helios/schema): exact model commands and authoritative `state` event fields.
-- [FastH3-Omni schema](https://docs.reactor.inc/model-api-reference/fast-h3-omni/schema), [prompt guide](https://docs.reactor.inc/model-api-reference/fast-h3-omni/prompt-guide), and [tutorial](https://docs.reactor.inc/model-api-reference/fast-h3-omni/tutorial) (reviewed November 4, 2026): queue commands, `ClipInfo`/`state_update` fields, upload limits, and continuation rules. The installed SDK's `upload_file` and `FileRef` handling in `send_command` were inspected; it serializes file references nested in lists. None of these pages state whether recording is enabled for FastH3-Omni; live tests confirmed it is.
-- [Authentication](https://docs.reactor.inc/authentication): API-key header, `/tokens` exchange, session scoping, and duration constraints.
-- [Recordings](https://docs.reactor.inc/concepts/recordings): clip readiness, recording availability, and retention.
-- [Billing](https://docs.reactor.inc/resources/billing): billing follows session allocation, including pauses.
-- [Official Reactor SDK source](https://github.com/reactor-team/reactor-client-sdks): installed 1.13.0 `client.py`, `_auth.py`, and `_recording.py` were inspected against the docs. The recordings guide describes Python output as MPEG-TS, while this SDK supports fragmented MP4. The downloader detects the actual manifest format instead of assuming one.
-- [Official MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) and [v2 migration guide](https://py.sdk.modelcontextprotocol.io/migration/): `MCPServer`, `Client`, snake-case annotation fields, explicit `ToolError` failures, typed results, stdio, and lifespan cleanup.
-- [Codex and Claude Code MCP registration](https://developers.openai.com/learn/docs-mcp), [Claude Code MCP](https://code.claude.com/docs/en/mcp-quickstart), [Codex skill locations](https://learn.chatgpt.com/docs/build-skills), and [Claude Code skills](https://code.claude.com/docs/en/skills): client registration and personal skill installation. CLI syntax was also checked against installed clients' `--help` and real commands in isolated temporary configurations.
-- [Python keyring](https://keyring.readthedocs.io/en/stable/): explicitly selected macOS Keychain backend with no plaintext fallback; the installed 25.7.0 backend was inspected. Credential storage/retrieval in tests uses a fake backend, never your real Keychain.
-
-`src/reactor_mcp/backend.py` uses bounded asynchronous HTTP for token exchange and download. Session control stays in the official Reactor SDK. This avoids the installed SDK downloader's blocking HTTP worker, whose requests have no explicit socket timeout. No undocumented inference REST endpoint was invented.
-
-See `VALIDATION.md` for local test evidence and remaining verification limits.
-
-This revision keeps the explicit local session/capture handles and local clip paths. Standard MCP Tasks and portable clip resource delivery remain future work; the server does not advertise durable Tasks or imply that a local file path is remotely downloadable.
+The server speaks stdio MCP. For a manual client config, see `examples/mcp-client.json` and `.env.example`; the server doesn't load `.env` files itself.

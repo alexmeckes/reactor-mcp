@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "reactor-inference-mcp"
 version = "0.4.1"
-description = "Local MCP tools for Reactor Helios and FastH3-Omni inference sessions"
+description = "Unofficial MCP server for Reactor FastH3-Omni and Helios video models"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["mcp==2.3.0", "reactor-sdk==1.13.0", "httpx>=0.28,<1", "keyring>=25.7,<26; sys_platform == 'darwin'"]
