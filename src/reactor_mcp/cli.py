@@ -59,6 +59,8 @@ def desired_entries(uvx: str) -> dict:
 def matches(existing: dict, desired: dict) -> bool:
     if not isinstance(existing, dict):
         return False
+    # Claude Code persists stdio entries with an empty env, which changes nothing.
+    existing = {k: v for k, v in existing.items() if not (k == "env" and v == {})}
     if any(existing.get(k) != v for k, v in desired.items()):
         return False
     # Extra environment/auth settings can change behavior; never silently accept them.

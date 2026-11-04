@@ -186,6 +186,12 @@ def test_conflict_never_overwrites(client, monkeypatch):
     run.assert_not_called()
 
 
+def test_claude_empty_env_matches_but_real_env_does_not():
+    desired = {"command": "/abs/uvx", "args": ["serve"]}
+    assert cli.matches({"type": "stdio", **desired, "env": {}}, desired)
+    assert not cli.matches({**desired, "env": {"REACTOR_ENABLE_LIVE": "true"}}, desired)
+
+
 @pytest.mark.parametrize("failure", ["nonzero", "timeout", "not-persisted"])
 def test_registration_failures_are_redacted(failure, monkeypatch, capsys):
     def run(*args, **kwargs):
