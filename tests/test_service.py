@@ -2,8 +2,8 @@ import asyncio
 import json
 
 import pytest
-from conftest import ready
-from reactor_sdk.errors import RateLimitedError
+from conftest import ready, ready_omni
+from reactor_sdk.errors import RateLimitedError, ReactorError
 
 from reactor_mcp.backend import ReactorFailure
 from reactor_mcp.service import Service
@@ -182,3 +182,82 @@ async def test_cancelled_close_caller_does_not_cancel_cleanup(live_mock):
     gate.set()
     await asyncio.wait_for(service.shutdown(), 1)
     assert fake.closed == fake.disconnected == 1
+
+
+async def test_omni_workflow_tracks_clips(live_mock, tmp_path):
+    service, fake = live_mock
+    image, voice = tmp_path / "hero.webp", tmp_path / "voice.m4a"
+    image.write_bytes(b"IMG")
+    voice.write_bytes(b"AUD")
+    handle = await ready_omni(service, aspect="1:1", autoplay=False, flush_on_clip_end=False)
+    assert fake.commands == [
+        ("set_canvas", {"aspect": "1:1"}),
+        ("set_autoplay", {"enabled": False}),
+        ("set_flush_on_clip_end", {"enabled": False}),
+    ]
+    assert service.status(handle)["model"] == "reactor/fast-h3-omni"
+    fake.reply = {"type": "clip_queued", "data": {"clip": {"clip_id": "c1", "metadata": "shot 1"}}}
+    result = await service.enqueue(
+        handle,
+        "<Picture 1> speaks with <Audio 1> as her voice",
+        reference_images=[str(image)],
+        reference_audios=[str(voice)],
+        first_frame_image=str(image),
+        seconds=8,
+    )
+    assert result["clip_id"] == "c1"
+    assert fake.uploads == [image, voice, image]
+    assert fake.commands[-1][1] == {
+        "prompt": "<Picture 1> speaks with <Audio 1> as her voice",
+        "metadata": "",
+        "seconds": 8,
+        "reference_images": ["ref:hero.webp"],
+        "reference_audios": ["ref:voice.m4a"],
+        "first_frame_image": "ref:hero.webp",
+    }
+    message = fake.handlers["message"]
+    message({"type": "clip_generated", "data": {"clip": {"clip_id": "c1", "build_seconds": 6.5}}})
+    message(
+        {"type": "state_update", "data": {"playing": False, "playout_queued": 1, "aspect": "1:1"}}
+    )
+    # A stale queued reply after generation must not move the clip backwards.
+    message({"type": "clip_queued", "data": {"clip": {"clip_id": "c1"}}})
+    status = service.status(handle)
+    assert status["clips"][0]["phase"] == "ready"
+    assert status["clips"][0]["build_seconds"] == 6.5
+    assert status["model_state"] == {"playing": False, "playout_queued": 1}
+    fake.reply = {"type": "clip_started", "data": {"clip": {"clip_id": "c1"}}}
+    await service.omni_control(handle, "play", "c1")
+    assert fake.commands[-1] == ("play", {"clip_id": "c1"})
+    assert service.status(handle)["clips"][0]["phase"] == "playing"
+    message({"type": "clip_failed", "data": {"clip": {"clip_id": "c2"}, "reason": "Secret text!"}})
+    assert service.status(handle)["clips"][1]["reason"] == "unspecified"
+    capture = service.capture(handle, None)
+    await service.captures[capture["capture_handle"]].task
+    assert fake.captured == [None]
+    await service.close(handle)
+
+
+async def test_omni_input_and_model_guards(live_mock, tmp_path):
+    service, fake = live_mock
+    helios = await ready(service)
+    with pytest.raises(ReactorFailure, match="WRONG_MODEL"):
+        await service.enqueue(helios, "clip")
+    await service.close(helios)
+    handle = await ready_omni(service)
+    with pytest.raises(ReactorFailure, match="WRONG_MODEL"):
+        await service.command(handle, "set_prompt", {"prompt": "x"})
+    secret = tmp_path / "id_rsa"
+    secret.write_text("private")
+    disguised = tmp_path / "photo.png"
+    disguised.symlink_to(secret)
+    for path in [str(secret), str(disguised), "relative.png", str(tmp_path / "missing.png")]:
+        with pytest.raises(ReactorFailure, match="INVALID_INPUT"):
+            await service.enqueue(handle, "clip", reference_images=[path])
+    with pytest.raises(ReactorFailure, match="INVALID_INPUT"):
+        await service.omni_control(handle, "pop")
+    assert fake.uploads == []
+    fake.command_error = ReactorError("queue is full", code="queue_full")
+    with pytest.raises(ReactorFailure, match="COMMAND_REFUSED: queue_full"):
+        await service.enqueue(handle, "clip")
+    await service.shutdown()

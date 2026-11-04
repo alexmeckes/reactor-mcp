@@ -92,7 +92,7 @@ async def test_saved_key_and_opt_in_drive_mock_inference(monkeypatch, tmp_path):
     backend = FakeBackend()
     received = []
 
-    def factory(key, seconds):
+    def factory(key, seconds, model):
         received.append((key, seconds))
         return backend
 

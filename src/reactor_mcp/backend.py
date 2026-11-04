@@ -15,7 +15,8 @@ import httpx
 from mcp.server.mcpserver.exceptions import ToolError
 from reactor_sdk import Reactor
 
-MODEL = "reactor/helios"
+HELIOS = "reactor/helios"
+OMNI = "reactor/fast-h3-omni"
 API = "https://api.reactor.inc"
 MAX_CLIP_BYTES = 256 * 1024 * 1024
 
@@ -47,9 +48,13 @@ def safe_error(exc: Exception) -> str:
         "INVALID_STATE": "Wait for ready status before issuing this operation.",
         "NETWORK_ERROR": "Check network connectivity to Reactor.",
         "VERSION_MISMATCH": "The pinned SDK may need updating for the live service.",
+        "RECORDER_DISABLED": "Recording is not enabled for this model.",
     }
     if code in hints:
         return f"{code}: {hints[code]}"
+    # Models refuse commands with their own lowercase codes, e.g. queue_full or invalid_image.
+    if isinstance(code, str) and re.fullmatch(r"[a-z][a-z_]{0,39}", code):
+        return f"COMMAND_REFUSED: {code}. A refused command changes nothing; see the model schema."
     return "REACTOR_ERROR: Operation failed; check network, model access, and session status."
 
 
@@ -150,9 +155,10 @@ async def download_clip(http: httpx.AsyncClient, clip, jwt: str, target: Path) -
 
 
 class LiveBackend:
-    def __init__(self, api_key: str, max_seconds: int):
+    def __init__(self, api_key: str, max_seconds: int, model: str = HELIOS):
         self.api_key = api_key
         self.max_seconds = max_seconds
+        self.model = model
         self.http = httpx.AsyncClient(timeout=15, follow_redirects=False, trust_env=False)
         self.reactor = None
         self.jwt = None
@@ -177,7 +183,7 @@ class LiveBackend:
                 "authorization_details": [
                     {
                         "type": "session",
-                        "resources": {"models": {"match": [MODEL]}},
+                        "resources": {"models": {"match": [self.model]}},
                         "constraints": {
                             "max_sessions": 1,
                             "max_session_duration_seconds": self.max_seconds,
@@ -191,7 +197,7 @@ class LiveBackend:
         self.jwt = document.get("jwt") if isinstance(document, dict) else None
         if not isinstance(self.jwt, str) or not self.jwt:
             raise ReactorFailure("INVALID_AUTH_RESPONSE: Reactor returned no session token.")
-        self.reactor = Reactor(model_name=MODEL, jwt=self.jwt)
+        self.reactor = Reactor(model_name=self.model, jwt=self.jwt)
         for event, handler in self.handlers:
             self.reactor.on(event, handler)
         await self.reactor.connect()
@@ -199,8 +205,16 @@ class LiveBackend:
     async def send_command(self, command, data):
         return await self.reactor.send_command(command, data)
 
-    async def capture(self, seconds: float, target: Path):
-        clip = await self.reactor.request_clip(seconds)
+    async def upload(self, path: Path):
+        return await self.reactor.upload_file(path)
+
+    async def capture(self, seconds: float | None, target: Path):
+        """Snap the last N media seconds, or the whole session when seconds is None."""
+        clip = await (
+            self.reactor.request_recording()
+            if seconds is None
+            else self.reactor.request_clip(seconds)
+        )
         path = await download_clip(self.http, clip, self.jwt, target)
         return path, {
             "session_id": clip.session_id,

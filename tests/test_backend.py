@@ -16,7 +16,8 @@ from reactor_mcp.backend import (
 )
 
 
-async def test_scoped_auth_and_sdk_connection(monkeypatch):
+@pytest.mark.parametrize("model", [backend.HELIOS, backend.OMNI])
+async def test_scoped_auth_and_sdk_connection(monkeypatch, model):
     calls = []
 
     def handler(request):
@@ -27,7 +28,7 @@ async def test_scoped_auth_and_sdk_connection(monkeypatch):
             "authorization_details": [
                 {
                     "type": "session",
-                    "resources": {"models": {"match": ["reactor/helios"]}},
+                    "resources": {"models": {"match": [model]}},
                     "constraints": {"max_sessions": 1, "max_session_duration_seconds": 60},
                 }
             ]
@@ -37,13 +38,13 @@ async def test_scoped_auth_and_sdk_connection(monkeypatch):
     fake = FakeBackend()
 
     def sdk_factory(**kwargs):
-        assert kwargs == {"model_name": "reactor/helios", "jwt": "test-jwt"}
+        assert kwargs == {"model_name": model, "jwt": "test-jwt"}
         # The real SDK has synchronous close(), unlike our service-facing test backend.
         fake.close = lambda: None
         return fake
 
     monkeypatch.setattr(backend, "Reactor", sdk_factory)
-    live = LiveBackend("test-key", 60)
+    live = LiveBackend("test-key", 60, model)
     await live.http.aclose()
     live.http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     live.on("message", lambda _: None)
@@ -219,5 +220,13 @@ def test_real_sdk_surface_imports_without_network():
 
     assert get_lib() is not None  # Load the installed platform library, without creating a session.
     assert "jwt" in inspect.signature(Reactor).parameters
-    for method in ["connect", "send_command", "request_clip", "disconnect", "close"]:
+    for method in [
+        "connect",
+        "send_command",
+        "request_clip",
+        "request_recording",
+        "upload_file",
+        "disconnect",
+        "close",
+    ]:
         assert callable(getattr(Reactor, method))

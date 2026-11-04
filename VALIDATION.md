@@ -1,5 +1,13 @@
 # Local validation
 
+## 0.4.0 (FastH3-Omni)
+
+Date: November 4, 2026. 73 automated tests and Ruff lint/format checks pass. New tests cover Omni token scope and SDK construction, start-time canvas/autoplay/flush commands, reference image/audio/keyframe uploads mapped into `enqueue`, clip phase tracking from replies and broadcasts (including a stale reply arriving after generation), sanitized failure reasons, model refusal codes, wrong-model guards, rejected non-media and symlinked upload paths, full-session capture, and MCP schema validation of Omni arguments. The real SDK exposes `upload_file` and `request_recording`.
+
+Not re-run for 0.4.0: the wheel/sdist build check and real client registration below. No live Omni session was started, so token acceptance for `reactor/fast-h3-omni`, upload acceptance, clip quality, and whether recording is enabled for this model are unverified.
+
+## 0.3.0
+
 Date: November 3, 2026. Release: 0.3.0. Environment: macOS arm64, Python 3.12.13, MCP SDK 2.3.0, Reactor SDK 1.13.0, keyring 25.7.0.
 
 ## Passed

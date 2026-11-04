@@ -32,6 +32,8 @@ class FakeBackend:
         self.session_id = None
         self.handlers = {}
         self.commands = []
+        self.uploads = []
+        self.captured = []
         self.disconnected = 0
         self.closed = 0
         self.connect_gate = None
@@ -59,7 +61,12 @@ class FakeBackend:
         self.commands.append((command, data))
         return self.reply
 
-    async def capture(self, seconds: float, target: Path):
+    async def upload(self, path: Path):
+        self.uploads.append(path)
+        return f"ref:{path.name}"
+
+    async def capture(self, seconds: float | None, target: Path):
+        self.captured.append(seconds)
         if self.capture_gate:
             await self.capture_gate.wait()
         target = target.with_suffix(".mp4")
@@ -84,10 +91,16 @@ def live_mock(monkeypatch, tmp_path):
     monkeypatch.setenv("REACTOR_ENABLE_LIVE", "true")
     monkeypatch.setenv("REACTOR_API_KEY", "rk_test_only_not_a_real_secret")
     fake = FakeBackend()
-    return Service(lambda key, seconds: fake, tmp_path), fake
+    return Service(lambda key, seconds, model: fake, tmp_path), fake
 
 
 async def ready(service):
     result = service.start("A quiet forest", 60)
+    await asyncio.wait_for(service.sessions[result["handle"]].task, 1)
+    return result["handle"]
+
+
+async def ready_omni(service, **options):
+    result = service.start_omni(**options)
     await asyncio.wait_for(service.sessions[result["handle"]].task, 1)
     return result["handle"]
