@@ -2,7 +2,7 @@
 
 ## 0.4.1 (live FastH3-Omni)
 
-Date: November 4, 2026. Two capped live sessions ran through the released v0.4.0 server. Token exchange for `reactor/fast-h3-omni`, WebRTC connection (about 6 seconds), `enqueue`, autoplay, and clip phase tracking worked; 5.875-second text clips built in 3.3–3.7 seconds. A full-session recording requested with nothing left to play returned HTTP 202 until the 150-second cap cancelled it. A recording requested while the next clip played completed in about 4 seconds: a 1344×768 H.264 + AAC fragmented MP4 covering the clips played so far. Reference uploads, keyframes, and continuation were not exercised live.
+Date: November 4, 2026. Two capped live sessions ran through the released v0.4.0 server. Token exchange for `reactor/fast-h3-omni`, WebRTC connection (about 6 seconds), `enqueue`, autoplay, and clip phase tracking worked; 5.875-second text clips built in 3.3–3.7 seconds. A full-session recording requested with nothing left to play returned HTTP 202 until the 150-second cap cancelled it. A recording requested while the next clip played completed in about 4 seconds: a 1344×768 H.264 + AAC fragmented MP4 covering the clips played so far. A third live session uploaded a scene image as reference and first-frame keyframe, then queued a latent continuation with two object reference images; both objects appeared in the continued scene and transformed as prompted. Its full-session capture needed two tail clips and about 25 seconds to complete. Audio references, last-frame keyframes, `frame` continuation, and the `move`/`pop`/`stop`/`reset` controls were not exercised live.
 
 ## 0.4.0 (FastH3-Omni)
 
